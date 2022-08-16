@@ -1,52 +1,51 @@
+import time
 from pynput import keyboard, mouse
 from screeninfo import get_monitors
-
-# !!!
-import time
 
 
 is_listen_run = False
 hotkey_macros_write = keyboard.Key.scroll_lock
-is_mouse_button_press = False
 primary_monitor_resolution = {}
 
 
 def coord_to_string(x, y):
-    return f'x{x / primary_monitor_resolution["width"]:.2f}y{y / primary_monitor_resolution["height"]:.2f}'
+    return f'{x / primary_monitor_resolution["width"]:.2f}{y / primary_monitor_resolution["height"]:.2f}'
 
 
-def mouse_buttom_to_string(button):
-    if button == mouse.Button.left:
-        return 'l'
+def string_to_coord(str_coord):
+    return round(float(str_coord[:4]) * primary_monitor_resolution['width']), \
+           round(float(str_coord[4:]) * primary_monitor_resolution['height'])
+
+
+mouse_buttom_to_string = {
+    mouse.Button.left: 'l',
+    mouse.Button.right: 'r',
+    mouse.Button.middle: 'm'
+}
+string_to_mouse_button = {v: k for k, v in mouse_buttom_to_string.items()}
 
 
 def on_move_mouse_track(x, y, track_mouse_actions):
-    if is_mouse_button_press:
-        track_mouse_actions.append(f'mm{coord_to_string(x, y)}')
-    # print('Pointer moved to {0}'.format((x, y)))
+    # track_mouse_actions.append(f'm{coord_to_string(x, y)}m')
+    pass
 
 
 def on_click_mouse_track(x, y, button, is_pressed, track_mouse_actions):
-    if is_pressed:
-        track_mouse_actions.append(f'mp{button.value}{coord_to_string(x, y)}')
-    else:
-        track_mouse_actions.append(f'mr{button.value}{coord_to_string(x, y)}')
-    print(track_mouse_actions[-1])
-    # print('{0} {1} at {2}'.format('Pressed' if is_pressed else 'Released', button, (x, y)))
-    # if not pressed:
-    #     # Stop listener
-    #     return False
+    track_mouse_actions.append(
+        f'm'
+        f'{coord_to_string(x, y)}'
+        f'{"p" if is_pressed else "r"}'
+        f'{mouse_buttom_to_string[button]}'
+    )
 
 
 def on_scroll_mouse_track(x, y, dx, dy, track_mouse_actions):
-    track_mouse_actions.append(f'ms{dx:+}{dy:+}{coord_to_string(x, y)}')
-    print(track_mouse_actions[-1])
-    # print('Scrolled {0} {1} at {2}'.format('down' if dy < 0 else 'up', dx, (x, y)))
+    track_mouse_actions.append(f'm{coord_to_string(x, y)}s{dx:+}{dy:+}')
 
 
 def key_to_string(key):
     try:
-        return f'{key.char}'
+        return key.char
     except AttributeError:
         return f'{str(key.value)[1:-1]:0>3}'
 
@@ -55,15 +54,13 @@ def on_press_keyboard_track(key, track_keyboard_actions, pressed_keys):
     key_pressed = key_to_string(key)
     if key_pressed not in key_pressing:
         pressed_keys.add(key_pressed)
-        # print('kp' + key_pressed)
-        track_keyboard_actions.append('kp' + key_pressed)
+        track_keyboard_actions.append(f'kp{key_pressed}')
 
 
 def on_release_keyboard_track(key, track_keyboard_actions, pressed_keys):
-    key_pressed = key_to_string(key)
-    pressed_keys.remove(key_pressed)
-    # print('kr' + key_pressed)
-    track_keyboard_actions.append('kr' + key_pressed)
+    key_released = key_to_string(key)
+    pressed_keys.discard(key_released)
+    track_keyboard_actions.append(f'kp{key_released}')
 
 
 def on_stop_listeners(key):
@@ -73,40 +70,48 @@ def on_stop_listeners(key):
         global is_listen_run
         is_listen_run = False
 
-    # if key == keyboard.Key.scroll_lock:
-    #     # Stop listener
-    #     # file_out.close()
-    #     return False
-
 
 def macros_run():
     keyboard_controller = keyboard.Controller()
-    # controller.press("<ctrl>")
+    mouse_controller = mouse.Controller()
+
     for t_a in track_actions:
+        time.sleep(0.2)
+        # Действия клавиатуры
         if t_a[0] == 'k':
             key = t_a[2:]
             if len(key) > 1:
                 key = keyboard.KeyCode.from_vk(int(key))
 
+            # Нажатие клавиши клавиатуры
             if t_a[1] == 'p':
                 keyboard_controller.press(key)
+            # Отпуск клавиши клавиатуры
             elif t_a[1] == 'r':
                 keyboard_controller.release(key)
 
+        # Действия мыши
+        elif t_a[0] == 'm':
+            position_dx, position_dy = string_to_coord(t_a[1:9])
+            position_dx -= mouse_controller.position[0]
+            position_dy -= mouse_controller.position[1]
+            mouse_controller.move(position_dx, position_dy)
 
-# def on_activate():
-#     print('Global hotkey activated!')
-#
-#
-# def for_canonical(f):
-#     print('for_canonical')
-#     return lambda k: f(l.canonical(k))
+            # Прокручивание колёсика
+            if t_a[9] == 's':
+                dx = int(t_a[10:12])
+                dy = int(t_a[12:14])
+                mouse_controller.scroll(dx, dy)
+            # Нажатие клавиши мыши
+            elif t_a[9] == 'p':
+                mouse_controller.press(string_to_mouse_button[t_a[10]])
+            # Отпуск клавиши мыши
+            elif t_a[9] == 'r':
+                mouse_controller.release(string_to_mouse_button[t_a[10]])
 
 
 if __name__ == '__main__':
     '''
-    
-    
     
     '''
 
@@ -122,19 +127,9 @@ if __name__ == '__main__':
     is_listen_run = False
 
     hotkey_listener = keyboard.Listener(
-        # on_press=,
         on_release=on_stop_listeners
     )
     hotkey_listener.start()
-
-    # file_out = open("key_pressed_history.txt", "w")
-
-    # Collect events until released
-    # with keyboard.Listener(
-    #         on_press=on_press,
-    #         on_release=on_release
-    #     ) as listener:
-    #     listener.join()
 
     # Прослушка клавиатуры
     keyboard_listener = keyboard.Listener(
@@ -155,12 +150,6 @@ if __name__ == '__main__':
     while is_listen_run:
         pass
 
-    # time.sleep(3)
-    # listener.stop()
-    macros_run()
+    # file_out = open("key_pressed_history.txt", "w")
 
-    # hotkey = keyboard.HotKey(keyboard.HotKey.parse('<ctrl>+<alt>+h'),
-    #                          on_activate)
-    # with keyboard.Listener(on_press=for_canonical(hotkey.press),
-    #                        on_release=for_canonical(hotkey.release)) as l:
-    #     l.join()
+    macros_run()
