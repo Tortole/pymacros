@@ -1,11 +1,19 @@
 import time
+import enum
 from pynput import keyboard, mouse
 from screeninfo import get_monitors
 
 
-is_listen_run = False
-hotkey_macros_write = keyboard.Key.scroll_lock
+# Запущена ли прослушка клавиатуры и мыши
+is_listen_run = True
+# Клавиша для запуска или остановки макроса
+hotkey_macros_write = keyboard.Key.shift_r
+# 
 primary_monitor_resolution = {}
+track_actions = []
+
+
+# vvvv mouse vvvv 
 
 
 def coord_to_string(x, y):
@@ -25,53 +33,87 @@ mouse_buttom_to_string = {
 string_to_mouse_button = {v: k for k, v in mouse_buttom_to_string.items()}
 
 
-def on_move_mouse_track(x, y, track_mouse_actions):
-    # track_mouse_actions.append(f'm{coord_to_string(x, y)}m')
+def on_move_mouse_track(x, y):
+    # global is_listen_run
+    # if is_listen_run:
+        # track_actions.append(f'm{coord_to_string(x, y)}m')
     pass
 
 
-def on_click_mouse_track(x, y, button, is_pressed, track_mouse_actions):
-    track_mouse_actions.append(
-        f'm'
-        f'{coord_to_string(x, y)}'
-        f'{"p" if is_pressed else "r"}'
-        f'{mouse_buttom_to_string[button]}'
-    )
+def on_click_mouse_track(x, y, button, is_pressed):
+    global is_listen_run
+    if is_listen_run:
+        track_actions.append(
+            f'm'
+            f'{coord_to_string(x, y)}'
+            f'{"p" if is_pressed else "r"}'
+            f'{mouse_buttom_to_string[button]}'
+        )
 
 
-def on_scroll_mouse_track(x, y, dx, dy, track_mouse_actions):
-    track_mouse_actions.append(f'm{coord_to_string(x, y)}s{dx:+}{dy:+}')
+def on_scroll_mouse_track(x, y, dx, dy):
+    global is_listen_run
+    if is_listen_run:
+        track_actions.append(f'm{coord_to_string(x, y)}s{dx:+}{dy:+}')
+
+
+# ^^^^ mouse ^^^^
+# vvvv keyboard vvvv
+
+space_key_code = '000'
+
+# class KeyCode(enum):
+#     space_key_code = '000'
+
+#     @classmethod
+#     def __missing__(self, value):
 
 
 def key_to_string(key):
     try:
         return key.char
     except AttributeError:
+        if key == keyboard.Key.space:
+            return space_key_code
         return f'{str(key.value)[1:-1]:0>3}'
 
-
-def on_press_keyboard_track(key, track_keyboard_actions, pressed_keys):
-    key_pressed = key_to_string(key)
-    if key_pressed not in key_pressing:
-        pressed_keys.add(key_pressed)
-        track_keyboard_actions.append(f'kp{key_pressed}')
-
-
-def on_release_keyboard_track(key, track_keyboard_actions, pressed_keys):
-    key_released = key_to_string(key)
-    pressed_keys.discard(key_released)
-    track_keyboard_actions.append(f'kp{key_released}')
+def string_to_key(string):
+    if len(string) > 1:
+        if string == space_key_code:
+            return keyboard.Key.space
+        else:
+            return keyboard.KeyCode.from_vk(int(string))
+    else:
+        return string
 
 
-def on_stop_listeners(key):
+pressed_keys = set([key_to_string(hotkey_macros_write)])
+
+
+def on_press_keyboard_track(key):
+    global is_listen_run
+    if is_listen_run:
+        key_pressed = key_to_string(key)
+        if key_pressed not in pressed_keys:
+            pressed_keys.add(key_pressed)
+            track_actions.append(f'kp{key_pressed}')
+
+
+def on_release_keyboard_track(key):
+    global is_listen_run
     if key == hotkey_macros_write:
-        keyboard_listener.stop()
-        mouse_listener.stop()
-        global is_listen_run
-        is_listen_run = False
+        is_listen_run = not is_listen_run
+    elif is_listen_run:
+        key_released = key_to_string(key)
+        pressed_keys.discard(key_released)
+        track_actions.append(f'kr{key_released}')
 
 
-def macros_run():
+# ^^^^ keyboard ^^^^
+
+
+# 
+def macros_run(track_actions):
     keyboard_controller = keyboard.Controller()
     mouse_controller = mouse.Controller()
 
@@ -79,9 +121,7 @@ def macros_run():
         time.sleep(0.2)
         # Действия клавиатуры
         if t_a[0] == 'k':
-            key = t_a[2:]
-            if len(key) > 1:
-                key = keyboard.KeyCode.from_vk(int(key))
+            key = string_to_key(t_a[2:])
 
             # Нажатие клавиши клавиатуры
             if t_a[1] == 'p':
@@ -113,6 +153,8 @@ def macros_run():
 if __name__ == '__main__':
     '''
     
+
+
     '''
 
     # Получение данных о разрешении монитора
@@ -122,34 +164,28 @@ if __name__ == '__main__':
             primary_monitor_resolution['height'] = m.height
             break
 
-    key_pressing = set()
-    track_actions = []
-    is_listen_run = False
-
-    hotkey_listener = keyboard.Listener(
-        on_release=on_stop_listeners
-    )
-    hotkey_listener.start()
-
     # Прослушка клавиатуры
     keyboard_listener = keyboard.Listener(
-        on_press=lambda key: on_press_keyboard_track(key, track_actions, key_pressing),
-        on_release=lambda key: on_release_keyboard_track(key, track_actions, key_pressing)
+        on_press=on_press_keyboard_track,
+        on_release=on_release_keyboard_track
     )
     keyboard_listener.start()
 
     # Прослушка мыши
     mouse_listener = mouse.Listener(
-        on_move=lambda x, y: on_move_mouse_track(x, y, track_actions),
-        on_click=lambda x, y, b, p: on_click_mouse_track(x, y, b, p, track_actions),
-        on_scroll=lambda x, y, dx, dy: on_scroll_mouse_track(x, y, dx, dy, track_actions))
+        on_move=on_move_mouse_track,
+        on_click=on_click_mouse_track,
+        on_scroll=on_scroll_mouse_track
+    )
     mouse_listener.start()
 
-    is_listen_run = True
+    # is_listen_run = True
 
     while is_listen_run:
         pass
 
     # file_out = open("key_pressed_history.txt", "w")
 
-    macros_run()
+    macros_run(track_actions)
+    mouse_listener.stop()
+    keyboard_listener.stop()
