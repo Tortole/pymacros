@@ -152,8 +152,8 @@ def macros_run(track_actions):
 
 if __name__ == '__main__':
     '''
+    We will been soon ALRIGHT
     
-
 
     '''
 
@@ -184,7 +184,8 @@ if __name__ == '__main__':
     while is_listen_run:
         pass
 
-    # file_out = open("key_pressed_history.txt", "w")
+    # with open("key_pressed_history.txt", "w") as file_out:
+    #     file_out.write(''.join(track_actions))
 
     macros_run(track_actions)
     mouse_listener.stop()
