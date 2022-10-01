@@ -300,5 +300,25 @@ class ActionsTrack:
                         key=ActionsTrack.string_to_mouse_button[l_a[10]]
                     )
 
+    def length(self):
+        return len(self.track)
+
+    def switch(self, first, second):
+        self.track[first], self.track[second] = self.track[second], self.track[first]
+
     def get_action(self, index):
-        pass
+        if self.track[index]['device'] == 'keyboard':
+            return f'{self.track[index]["action"]} {self.track[index]["key"]}'
+
+        elif self.track[index]['device'] == 'mouse':
+            return_string = f'{self.track[index]["action"]}'\
+                            f' x - {self.track[index]["x"]}'\
+                            f' y - {self.track[index]["y"]}'
+            if self.track[index]["action"] == 'scroll':
+                return_string += f' dx - {self.track[index]["dx"]}'\
+                                 f' dy - {self.track[index]["dy"]}'
+            elif (self.track[index]["action"] == 'press' or 
+                  self.track[index]["action"] == 'release'):                
+                return_string += f' key - {self.track[index]["key"]}'
+
+            return return_string
