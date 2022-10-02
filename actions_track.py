@@ -13,14 +13,6 @@ class ActionsTrack:
         self.mouse_listener = None
         # Клавиша для запуска или остановки макроса
         self.hotkey_macros_write = keyboard.Key.shift_r
-        # Значения разрешения главного экрана
-        self.primary_monitor_resolution = {}
-        # Получение данных о разрешении монитора
-        for m in get_monitors():
-            if m.is_primary:
-                self.primary_monitor_resolution['width'] = m.width
-                self.primary_monitor_resolution['height'] = m.height
-                break
         # Последовательность действий клавиатуры и мыши
         self.track = []
         # Множество нажатых клавиш
@@ -138,6 +130,10 @@ class ActionsTrack:
         self.mouse_listener.stop()
         self.keyboard_listener.stop()
 
+    def insert(self, index, actions_track):
+        if self.length() <= index < 0: raise ValueError('Index incorrect.')
+        self.track[index:index] = actions_track.track
+
     def run(self):
         keyboard_controller = keyboard.Controller()
         mouse_controller = mouse.Controller()
@@ -178,12 +174,25 @@ class ActionsTrack:
     string_to_mouse_button = {v: k for k, v in mouse_buttom_to_string.items()}    
     space_key_code = '000'
 
-    def coord_to_string(self, x, y):
-        return f'{x / self.primary_monitor_resolution["width"]:.2f}{y / self.primary_monitor_resolution["height"]:.2f}'
+    def get_resolution():        
+        # Значения разрешения главного экрана
+        primary_monitor_resolution = {}
+        # Получение данных о разрешении монитора
+        for m in get_monitors():
+            if m.is_primary:
+                primary_monitor_resolution['width'] = m.width
+                primary_monitor_resolution['height'] = m.height
+                break
+        return primary_monitor_resolution
 
-    def string_to_coord(self, str_coord):
-        return round(float(str_coord[:4]) * self.primary_monitor_resolution['width']), \
-            round(float(str_coord[4:]) * self.primary_monitor_resolution['height'])
+    def coord_to_string(x, y):
+        resolution = ActionsTrack.get_resolution()
+        return f'{x / resolution["width"]:.2f}{y / resolution["height"]:.2f}'
+
+    def string_to_coord(str_coord):
+        resolution = ActionsTrack.get_resolution()
+        return round(float(str_coord[:4]) * resolution['width']), \
+            round(float(str_coord[4:]) * resolution['height'])
 
     def key_to_string(key):
         try:
@@ -204,35 +213,33 @@ class ActionsTrack:
 
     def to_string(self):
         list_str = []
-
         for t in self.track:
-
             if t['device'] == 'mouse':
                 if t['action'] == 'press':
                     list_str.append(
                         f'm'
-                        f'{self.coord_to_string(t["x"], t["y"])}'
+                        f'{ActionsTrack.coord_to_string(t["x"], t["y"])}'
                         f'p'
                         f'{ActionsTrack.mouse_buttom_to_string[t["key"]]}'
                     )
                 elif t['action'] == 'release':
                     list_str.append(
                         f'm'
-                        f'{self.coord_to_string(t["x"], t["y"])}'
+                        f'{ActionsTrack.coord_to_string(t["x"], t["y"])}'
                         f'r'
                         f'{ActionsTrack.mouse_buttom_to_string[t["key"]]}'
                     )
                 elif t['action'] == 'scroll':
                     list_str.append(
                         f'm'
-                        f'{self.coord_to_string(t["x"], t["y"])}'
+                        f'{ActionsTrack.coord_to_string(t["x"], t["y"])}'
                         f's'
                         f'{t["dx"]:+}{t["dy"]:+}'
                     )
                 elif t['action'] == 'move':
                     list_str.append(
                         f'm'
-                        f'{self.coord_to_string(t["x"], t["y"])}'
+                        f'{ActionsTrack.coord_to_string(t["x"], t["y"])}'
                         f'm'
                     )
 
@@ -267,7 +274,7 @@ class ActionsTrack:
 
             # Действия мыши
             elif l_a[0] == 'm':
-                position_dx, position_dy = self.string_to_coord(l_a[1:9])
+                position_dx, position_dy = ActionsTrack.string_to_coord(l_a[1:9])
 
                 # Прокручивание колёсика
                 if l_a[9] == 's':
